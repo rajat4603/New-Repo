@@ -95,6 +95,7 @@
       top: 5px;
       left: 50%;
       transform-origin: bottom center;
+      transition: transform 0.5s ease-out;
     }
     .direction-text {
       margin-top: 10px;
@@ -216,11 +217,11 @@
         <div class="threshold-container">
           <div class="threshold-label">
             <label>Min:</label>
-            <input type="number" id="temp-min" class="threshold-input" value="15" step="0.5">
+            <input type="number" id="temp-min" class="threshold-input" value="15" step="0.5" />
           </div>
           <div class="threshold-label">
             <label>Max:</label>
-            <input type="number" id="temp-max" class="threshold-input" value="35" step="0.5">
+            <input type="number" id="temp-max" class="threshold-input" value="35" step="0.5" />
           </div>
         </div>
       </div>
@@ -229,11 +230,11 @@
         <div class="threshold-container">
           <div class="threshold-label">
             <label>Min:</label>
-            <input type="number" id="humidity-min" class="threshold-input" value="30" step="1">
+            <input type="number" id="humidity-min" class="threshold-input" value="30" step="1" />
           </div>
           <div class="threshold-label">
             <label>Max:</label>
-            <input type="number" id="humidity-max" class="threshold-input" value="80" step="1">
+            <input type="number" id="humidity-max" class="threshold-input" value="80" step="1" />
           </div>
         </div>
       </div>
@@ -242,11 +243,11 @@
         <div class="threshold-container">
           <div class="threshold-label">
             <label>Min:</label>
-            <input type="number" id="pressure-min" class="threshold-input" value="980" step="1">
+            <input type="number" id="pressure-min" class="threshold-input" value="980" step="1" />
           </div>
           <div class="threshold-label">
             <label>Max:</label>
-            <input type="number" id="pressure-max" class="threshold-input" value="1030" step="1">
+            <input type="number" id="pressure-max" class="threshold-input" value="1030" step="1" />
           </div>
         </div>
       </div>
@@ -255,11 +256,11 @@
         <div class="threshold-container">
           <div class="threshold-label">
             <label>Min:</label>
-            <input type="number" id="wind-min" class="threshold-input" value="0" step="0.5">
+            <input type="number" id="wind-min" class="threshold-input" value="0" step="0.5" />
           </div>
           <div class="threshold-label">
             <label>Max:</label>
-            <input type="number" id="wind-max" class="threshold-input" value="15" step="0.5">
+            <input type="number" id="wind-max" class="threshold-input" value="15" step="0.5" />
           </div>
         </div>
       </div>
@@ -316,38 +317,36 @@
   </div>
 
   <script>
-    // Firebase configuration
+    // Firebase configuration - ensure this matches your Firebase project exactly
     const firebaseConfig = {
       apiKey: "AIzaSyCWx7Pdm0rLMLF3xhurj5sxE16Q60l5Oiw",
       authDomain: "weather-station-712eb.firebaseapp.com",
-      databaseURL: "http://weather-station-712eb-default-rtdb.firebaseio.com",
+      databaseURL: "https://weather-station-712eb-default-rtdb.firebaseio.com",
       projectId: "weather-station-712eb",
-      storageBucket: "weather-station-712eb.firebasestorage.app",
+      storageBucket: "weather-station-712eb.appspot.com",
       messagingSenderId: "567542912124",
       appId: "1:567542912124:web:b60f89f552f7713b4ae5f9",
       measurementId: "G-WDCCYKRSWW"
     };
-    
+
     // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
     const sensorRef = database.ref('sensor/current');
 
     const maxPoints = 20;
-    const history = [];
-    const directionHistory = [];
-    let fetchInterval;
-    let lastUpdateTime = null;
-    let countdownInterval;
-    let retryCountdown = 30;
-    let isConnected = false;
-    
     const labels = [];
     const tempData = [];
     const minTemps = [];
     const maxTemps = [];
+    const humidityData = [];
+    const pressureData = [];
     const windData = [];
     const windDirectionData = [];
+
+    let retryCountdown = 30;
+    let countdownInterval = null;
+    let isConnected = false;
 
     // Wind status descriptions
     const windDescriptions = [
@@ -366,28 +365,9 @@
       { max: Infinity, desc: "Hurricane", color: "#800080" }
     ];
 
-    // Convert cardinal/intercardinal direction to degrees
-    function directionToDegrees(dir) {
-      const directions = {
-        "N": 0, "NNE": 22.5, "NE": 45, "ENE": 67.5,
-        "E": 90, "ESE": 112.5, "SE": 135, "SSE": 157.5,
-        "S": 180, "SSW": 202.5, "SW": 225, "WSW": 247.5,
-        "W": 270, "WNW": 292.5, "NW": 315, "NNW": 337.5
-      };
-      
-      if (directions.hasOwnProperty(dir)) {
-        return directions[dir];
-      } else if (!isNaN(dir)) {
-        return Number(dir);
-      }
-      return 0;
-    }
-
-    // Convert degrees to cardinal/intercardinal direction
+    // Utility: Convert degrees to cardinal direction
     function degreesToDirection(degrees) {
-      // Normalize degrees to 0-360
       degrees = (degrees % 360 + 360) % 360;
-      
       if (degrees >= 348.75 || degrees < 11.25) return "N";
       if (degrees >= 11.25 && degrees < 33.75) return "NNE";
       if (degrees >= 33.75 && degrees < 56.25) return "NE";
@@ -404,7 +384,7 @@
       if (degrees >= 281.25 && degrees < 303.75) return "WNW";
       if (degrees >= 303.75 && degrees < 326.25) return "NW";
       if (degrees >= 326.25 && degrees < 348.75) return "NNW";
-      return "N"; // Default
+      return "N";
     }
 
     // Get wind description based on speed
@@ -417,7 +397,7 @@
       return { text: "Unknown", color: "#ffffff" };
     }
 
-    // Only show error toasts, not success messages
+    // Toast error messages only
     const toast = (msg, type = "info") => {
       if (type === "error") {
         Toastify({
@@ -430,6 +410,7 @@
       }
     };
 
+    // Charts initialization
     const temperatureChart = new Chart(document.getElementById("temperatureChart"), {
       type: "line",
       data: {
@@ -450,7 +431,7 @@
       type: "line",
       data: { 
         labels: labels, 
-        datasets: [{ label: "Humidity (%)", data: [], borderColor: "cyan", fill: false }] 
+        datasets: [{ label: "Humidity (%)", data: humidityData, borderColor: "cyan", fill: false }] 
       },
       options: { 
         scales: { y: { beginAtZero: true } },
@@ -462,7 +443,7 @@
       type: "line",
       data: { 
         labels: labels, 
-        datasets: [{ label: "Pressure (hPa)", data: [], borderColor: "lime", fill: false }] 
+        datasets: [{ label: "Pressure (hPa)", data: pressureData, borderColor: "lime", fill: false }] 
       },
       options: { 
         scales: { y: { beginAtZero: true } },
@@ -502,7 +483,7 @@
               label: function(context) {
                 const index = context.dataIndex;
                 const direction = windDirectionData[index] || '--';
-                return [Wind Speed: ${context.parsed.y} m/s, Direction: ${direction}];
+                return [`Wind Speed: ${context.parsed.y} m/s`, `Direction: ${direction}`];
               }
             }
           }
@@ -514,47 +495,117 @@
     function updateDirectionHistory(direction) {
       const historyElement = document.getElementById('direction-history');
       if (!historyElement) return;
-
-      // Keep only last 20 directions
-      directionHistory.push(direction);
-      if (directionHistory.length > 20) {
-        directionHistory.shift();
+      // Keep max 100 markers
+      while (historyElement.children.length >= 100) {
+        historyElement.removeChild(historyElement.firstChild);
       }
-
-      // Clear previous markers
-      historyElement.innerHTML = '';
-
-      // Create new markers
-      const width = historyElement.offsetWidth;
-      const segmentWidth = width / 20;
-
-      directionHistory.forEach((dir, index) => {
-        const degrees = directionToDegrees(dir);
-        const marker = document.createElement('div');
-        marker.className = 'direction-marker';
-        marker.style.height = '40px';
-        marker.style.left = ${index * segmentWidth + segmentWidth/2}px;
-        marker.style.transform = rotate(${degrees}deg);
-        
-        if (index === directionHistory.length - 1) {
-          marker.style.backgroundColor = '#ff9933'; // Highlight most recent
-          marker.style.width = '3px';
-        }
-        
-        historyElement.appendChild(marker);
-      });
+      const marker = document.createElement('div');
+      marker.className = 'direction-marker';
+      marker.style.left = `${historyElement.children.length * 3}px`;
+      marker.style.height = '50px';
+      marker.style.transform = `rotate(${directionToDegrees(direction)}deg)`;
+      historyElement.appendChild(marker);
     }
 
-    function checkThresholds(id, value) {
-      const minInput = document.getElementById(${id}-min);
-      const maxInput = document.getElementById(${id}-max);
-      const card = document.getElementById(${id}-card);
-      
-      if (!minInput || !maxInput || !card) return;
-      
-      const min = parseFloat(minInput.value);
-      const max = parseFloat(maxInput.value);
-      
+    // Convert cardinal/intercardinal to degrees
+    function directionToDegrees(dir) {
+      const directions = {
+        "N": 0, "NNE": 22.5, "NE": 45, "ENE": 67.5,
+        "E": 90, "ESE": 112.5, "SE": 135, "SSE": 157.5,
+        "S": 180, "SSW": 202.5, "SW": 225, "WSW": 247.5,
+        "W": 270, "WNW": 292.5, "NW": 315, "NNW": 337.5
+      };
+      if (directions.hasOwnProperty(dir)) {
+        return directions[dir];
+      } else if (!isNaN(dir)) {
+        return Number(dir);
+      }
+      return 0;
+    }
+
+    // Update UI with new sensor data
+    function updateUI(data) {
+      if (!data) return;
+
+      const temp = parseFloat(data.temperature);
+      const humidity = parseFloat(data.humidity);
+      const pressure = parseFloat(data.pressure);
+      const windSpeed = parseFloat(data.windSpeed);
+      const windDir = data.windDirection;
+
+      // Update current values
+      document.getElementById('temp').textContent = isNaN(temp) ? '-- °C' : `${temp.toFixed(1)} °C`;
+      document.getElementById('humidity').textContent = isNaN(humidity) ? '-- %' : `${humidity.toFixed(0)} %`;
+      document.getElementById('pressure').textContent = isNaN(pressure) ? '-- hPa' : `${pressure.toFixed(0)} hPa`;
+      document.getElementById('windSpeed').textContent = isNaN(windSpeed) ? '-- m/s' : `${windSpeed.toFixed(1)} m/s`;
+      document.getElementById('wind-speed-value').textContent = isNaN(windSpeed) ? '-- m/s' : `${windSpeed.toFixed(1)} m/s`;
+      document.getElementById('wind-direction-value').textContent = windDir || '--';
+
+      // Update wind status
+      const windStatus = getWindDescription(windSpeed);
+      const windStatusEl = document.getElementById('wind-status');
+      windStatusEl.textContent = windStatus.text;
+      windStatusEl.style.color = windStatus.color;
+
+      // Update compass needle
+      const needle = document.getElementById('needle');
+      const deg = directionToDegrees(windDir);
+      needle.style.transform = `rotate(${deg}deg)`;
+
+      // Update direction text
+      document.getElementById('direction-text').textContent = windDir || '--';
+
+      // Update charts and history arrays
+      const now = new Date();
+      const label = now.toLocaleTimeString();
+
+      // Maintain maxPoints length
+      if (labels.length >= maxPoints) {
+        labels.shift();
+        tempData.shift();
+        minTemps.shift();
+        maxTemps.shift();
+        humidityData.shift();
+        pressureData.shift();
+        windData.shift();
+        windDirectionData.shift();
+      }
+
+      labels.push(label);
+      tempData.push(temp);
+      // For min/max temp, use threshold inputs or fallback values
+      const minTempInput = document.getElementById('temp-min');
+      const maxTempInput = document.getElementById('temp-max');
+      const minTempVal = minTempInput ? parseFloat(minTempInput.value) : 0;
+      const maxTempVal = maxTempInput ? parseFloat(maxTempInput.value) : 50;
+      minTemps.push(minTempVal);
+      maxTemps.push(maxTempVal);
+
+      humidityData.push(humidity);
+      pressureData.push(pressure);
+      windData.push(windSpeed);
+      windDirectionData.push(windDir);
+
+      // Update charts
+      temperatureChart.update();
+      humidityChart.update();
+      pressureChart.update();
+      windSpeedChart.update();
+
+      // Update direction history visualization
+      updateDirectionHistory(windDir);
+
+      // Highlight cards based on thresholds
+      highlightThreshold('temp-card', temp, minTempVal, maxTempVal);
+      highlightThreshold('humidity-card', humidity, parseFloat(document.getElementById('humidity-min').value), parseFloat(document.getElementById('humidity-max').value));
+      highlightThreshold('pressure-card', pressure, parseFloat(document.getElementById('pressure-min').value), parseFloat(document.getElementById('pressure-max').value));
+      highlightThreshold('wind-card', windSpeed, parseFloat(document.getElementById('wind-min').value), parseFloat(document.getElementById('wind-max').value));
+    }
+
+    // Highlight card if value is out of threshold range
+    function highlightThreshold(cardId, value, min, max) {
+      const card = document.getElementById(cardId);
+      if (!card) return;
       if (value < min || value > max) {
         card.classList.add('out-of-range');
       } else {
@@ -562,211 +613,101 @@
       }
     }
 
-    function updateText(id, val, unit) {
-      const element = document.getElementById(id);
-      if (element) {
-        element.innerText = ${val} ${unit};
-        
-        // Check thresholds for main readings
-        if (id === "temp") checkThresholds("temp", val);
-        if (id === "humidity") checkThresholds("humidity", val);
-        if (id === "pressure") checkThresholds("pressure", val);
-        if (id === "windSpeed") checkThresholds("wind", val);
-      }
-    }
-
-    function updateNeedle(dir) {
-      // Convert direction to degrees
-      const degrees = directionToDegrees(dir);
-      
-      // Update needle rotation
-      const needle = document.getElementById("needle");
-      if (needle) {
-        needle.style.transform = rotate(${degrees}deg);
-      }
-      
-      // Update direction text
-      const directionText = document.getElementById("direction-text");
-      if (directionText) {
-        const cardinalDir = typeof dir === 'number' ? degreesToDirection(dir) : dir;
-        directionText.innerText = cardinalDir;
-      }
-      
-      // Update direction in detailed wind info
-      const directionValue = document.getElementById("wind-direction-value");
-      if (directionValue) {
-        const cardinalDir = typeof dir === 'number' ? degreesToDirection(dir) : dir;
-        directionValue.innerText = ${cardinalDir} (${Math.round(degrees)}°);
-      }
-      
-      // Update direction history
-      updateDirectionHistory(dir);
-    }
-
-    function updateWindStatus(speed) {
-      const statusElement = document.getElementById("wind-status");
-      if (!statusElement) return;
-      
-      const desc = getWindDescription(speed);
-      statusElement.innerText = desc.text;
-      statusElement.style.color = desc.color;
-      
-      // Also update the detailed wind speed display
-      const speedValue = document.getElementById("wind-speed-value");
-      if (speedValue) {
-        speedValue.innerText = ${speed} m/s;
-      }
-    }
-
-    function checkConnection() {
-      const now = new Date();
-      if (lastUpdateTime) {
-        const timeSinceUpdate = now - lastUpdateTime;
-        // If no updates in 15 seconds, consider disconnected
-        if (timeSinceUpdate > 15000 && isConnected) {
-          disconnect("⚠ Sensor disconnected - No data received");
-        }
-      }
-    }
-
+    // Fetch data from Firebase Realtime Database
     function fetchData() {
       sensorRef.once('value')
         .then(snapshot => {
           const data = snapshot.val();
-          if (!data) {
-            disconnect("⚠ No sensor data found in Firebase");
-            return;
-          }
-          
-          const now = new Date();
-          const timeString = now.toLocaleTimeString();
-          lastUpdateTime = now;
-          isConnected = true;
-          
-          // Update display values
-          updateText("temp", data.temperature_dht, "°C");
-          updateText("humidity", data.humidity, "%");
-          updateText("pressure", data.pressure, "hPa");
-          updateText("windSpeed", data.wind_speed, "m/s");
-          
-          updateNeedle(data.wind_direction);
-          updateWindStatus(data.wind_speed);
-          
-          // Calculate min/max for last 24 values
-          const recent = [...tempData.slice(-24), data.temperature_dht];
-          const min = recent.length > 0 ? Math.min(...recent) : data.temperature_dht;
-          const max = recent.length > 0 ? Math.max(...recent) : data.temperature_dht;
-          
-          updateText("minTemp", min.toFixed(1), "°C");
-          updateText("maxTemp", max.toFixed(1), "°C");
-          
-          // Update charts only if connected
-          if (isConnected) {
-            labels.push(timeString);
-            tempData.push(data.temperature_dht);
-            minTemps.push(min);
-            maxTemps.push(max);
-            humidityChart.data.datasets[0].data.push(data.humidity);
-            pressureChart.data.datasets[0].data.push(data.pressure);
-            windData.push(data.wind_speed);
-            windDirectionData.push(data.wind_direction);
-            
-            // Limit chart points
-            if (labels.length > maxPoints) {
-              labels.shift();
-              tempData.shift();
-              minTemps.shift();
-              maxTemps.shift();
-              humidityChart.data.datasets[0].data.shift();
-              pressureChart.data.datasets[0].data.shift();
-              windData.shift();
-              windDirectionData.shift();
-            }
-            
-            // Update status and charts
-            document.getElementById("firebaseStatus").textContent = "Connected ✅";
-            document.getElementById("retryTimer").textContent = "";
-            
-            temperatureChart.update();
-            humidityChart.update();
-            pressureChart.update();
-            windSpeedChart.update();
-          }
-          
-          // Save to history for CSV export
-          history.push({
-            timestamp: timeString,
-            temperature: data.temperature_dht,
-            humidity: data.humidity,
-            pressure: data.pressure,
-            wind_speed: data.wind_speed,
-            wind_direction: data.wind_direction
-          });
-          
-          // Keep history at reasonable size
-          if (history.length > 100) {
-            history.shift();
+          if (data) {
+            updateUI(data);
+            setConnectionStatus(true);
+            resetRetryCountdown();
+          } else {
+            toast("No data available from Firebase", "error");
+            setConnectionStatus(false);
           }
         })
         .catch(error => {
-          disconnect("❌ Failed to fetch from Firebase: " + error.message);
-          console.error("Error fetching from Firebase", error);
+          toast("Error fetching data: " + error.message, "error");
+          setConnectionStatus(false);
         });
     }
 
-    function disconnect(msg) {
-      isConnected = false;
-      clearInterval(fetchInterval);
-      document.getElementById("firebaseStatus").textContent = msg;
-      toast(msg, "error");
-      startCountdown();
+    // Set connection status text and color
+    function setConnectionStatus(connected) {
+      const statusEl = document.getElementById('firebaseStatus');
+      isConnected = connected;
+      if (connected) {
+        statusEl.textContent = "Connected to Firebase";
+        statusEl.style.color = "lime";
+        clearInterval(countdownInterval);
+        document.getElementById('retryTimer').textContent = "";
+      } else {
+        statusEl.textContent = "Disconnected from Firebase. Retrying...";
+        statusEl.style.color = "red";
+        startRetryCountdown();
+      }
     }
 
-    function startCountdown() {
+    // Retry countdown logic
+    function startRetryCountdown() {
+      if (countdownInterval) return; // Already running
       retryCountdown = 30;
-      clearInterval(countdownInterval);
+      const retryTimerEl = document.getElementById('retryTimer');
+      retryTimerEl.textContent = `Retrying in ${retryCountdown} seconds...`;
       countdownInterval = setInterval(() => {
         retryCountdown--;
-        document.getElementById("retryTimer").textContent = Retrying in ${retryCountdown}s...;
-        if (retryCountdown === 0) {
+        if (retryCountdown <= 0) {
           clearInterval(countdownInterval);
-          reconnect();
+          countdownInterval = null;
+          retryTimerEl.textContent = "";
+          fetchData();
+        } else {
+          retryTimerEl.textContent = `Retrying in ${retryCountdown} seconds...`;
         }
       }, 1000);
     }
 
+    // Manual reconnect button handler
     function reconnect() {
-      clearInterval(fetchInterval);
-      clearInterval(countdownInterval);
-      document.getElementById("retryTimer").textContent = "";
-      document.getElementById("firebaseStatus").textContent = "Reconnecting...";
-      
-      // Try to fetch immediately
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+        document.getElementById('retryTimer').textContent = "";
+      }
       fetchData();
-      
-      // Set up regular polling
-      fetchInterval = setInterval(fetchData, 5000);
-      
-      // Check connection status every 10 seconds
-      setInterval(checkConnection, 10000);
     }
 
+    // Export data to CSV (basic implementation)
     function exportCSV() {
-      let csv = "Timestamp,Temperature,Humidity,Pressure,WindSpeed,WindDirection\n";
-      history.forEach(e => {
-        csv += ${e.timestamp},${e.temperature},${e.humidity},${e.pressure},${e.wind_speed},${e.wind_direction}\n;
-      });
-      
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "crane_weather_data.csv";
-      a.click();
+      if (labels.length === 0) {
+        toast("No data to export", "error");
+        return;
+      }
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "Time,Temperature,Min Temp,Max Temp,Humidity,Pressure,Wind Speed,Wind Direction\n";
+      for (let i = 0; i < labels.length; i++) {
+        csvContent += `${labels[i]},${tempData[i]},${minTemps[i]},${maxTemps[i]},${humidityData[i]},${pressureData[i]},${windData[i]},${windDirectionData[i]}\n`;
+      }
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "weather_data.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
-    // Start fetching on load
-    reconnect();
+    // Initial fetch and periodic updates every 30 seconds
+    function startFetching() {
+      fetchData();
+      setInterval(fetchData, 30000);
+    }
+
+    // Start the app
+    window.onload = () => {
+      startFetching();
+    };
   </script>
 </body>
 </html>
